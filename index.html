@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Guadarrama ski</title>
+<meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.css" rel="stylesheet">
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.js"></script>
+<!-- Incluye FontAwesome -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+<style>
+body { margin: 0; padding: 0; }
+#map { position: absolute; top: 0; bottom: 0; width: 100%; }
+#map-controls {
+    background-color: black;
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+#map-controls button {
+    background-color: black;
+    border: none;
+    padding: 10px;
+    margin-bottom: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    border-radius: 5px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+#map-controls button:hover {
+    background-color: #333;
+}
+#map-controls i {
+    font-size: 15px;
+    color: white;
+}
+#slider-container {
+    position: absolute;
+    bottom: 30px;
+    right: 10px; /* Alineado con los botones de control */
+    z-index: 1;
+    width: 300px;
+    background-color: black; /* Fondo negro */
+    padding: 10px;
+    border-radius: 5px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    font-family: 'Bahnschrift SemiBold', Arial, sans-serif; /* Fuente Bahnschrift o Arial */
+    font-size: 10px;
+    color: white; /* Texto en blanco */
+}
+
+#snow-slider {
+    width: 100%;
+}
+/* Estilo personalizado para el popup */
+.custom-popup .mapboxgl-popup-content {
+    background-color: rgba(0, 0, 0, 0.5); /* Fondo negro con opacidad del 50% */
+    color: white; /* Texto blanco */
+    border-radius: 8px; /* Bordes redondeados */
+    padding: 10px; /* Espacio interno */
+}
+.custom-popup .mapboxgl-popup-tip {
+    border-top-color: rgba(0, 0, 0, 0.5); /* La punta del popup también será negra con opacidad */
+}
+
+.mapboxgl-popup {
+    max-width: 400px;
+    font: 12px/20px 'Bahnschrift SemiBold', Arial, Helvetica, sans-serif;
+}
+/* Estilos responsivos */
+@media (max-width: 768px) {
+    #map-controls button {
+        padding: 5px;
+        font-size: 12px;
+    }
+    #map-controls i {
+        font-size: 12px;
+    }
+    #slider-container {
+        width: 200px;
+        padding: 5px;
+    }
+    #snow-slider {
+        width: 100%;
+    }
+}
+/* Estilo para el botón de pantalla completa (con ícono) */
+#fullscreen-button {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 999;
+    background-color: black;
+    border: none;
+    padding: 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+#fullscreen-button i {
+    color: white;
+    font-size: 16px;
+}
+
+#fullscreen-button:hover {
+    background-color: #333;
+}
+</style>
+</head>
+<body>
+<!-- Load the `mapbox-gl-geocoder` plugin. -->
+<script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.min.js"></script>
+<link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.css" type="text/css">
+<nav id="menu"></nav>
+<div id="map"></div>
+<!-- Contenedor para los botones de control -->
+<div id="map-controls">
+    <button id="tilt-up" title="Tilt Up">
+        <i class="fas fa-arrow-up"></i>
+    </button>
+    <button id="tilt-down" title="Tilt Down">
+        <i class="fas fa-arrow-down"></i>
+    </button>
+    <button id="rotate-left" title="Rotate Left">
+        <i class="fas fa-undo-alt"></i>
+    </button>
+    <button id="rotate-right" title="Rotate Right">
+        <i class="fas fa-redo-alt"></i>
+    </button>
+    <button id="reset-north" title="Reset North">
+        <i class="fas fa-compass"></i>
+    </button>
+</div>
+<!-- Slider para filtrar la acumulación de nieve -->
+<div id="slider-container">
+    <label for="snow-slider">Nivel de nieve:</label>
+    <input id="snow-slider" type="range" min="0" max="18" step="1" value="18">
+</div>
+<!-- Botón de pantalla completa con ícono -->
+<button id="fullscreen-button">
+    <i class="fas fa-expand"></i> <!-- Icono de FontAwesome para pantalla completa -->
+</button>
+<script>
+    mapboxgl.accessToken = 'pk.eyJ1IjoibWFyaW9nYXBlIiwiYSI6ImNsem1qcXN4MDA1aTcyanNmbGpncHIwemoifQ.9QwhIzXtEar5Ok5433aPCQ';
+    const map = new mapboxgl.Map({
+        container: 'map',
+        zoom: 13,
+        center: [-3.95, 40.85],
+        pitch: 70,
+        bearing: 0,
+        style: 'mapbox://styles/mapbox/satellite-streets-v12'
+    });
+    map.on('load', () => {
+        // Añadir fuentes y capas al cargar el mapa
+        // Añadir la capa de acumulación de nieve
+        map.addSource('snow_accumulation', {
+            type: 'vector',
+            url: 'mapbox://mariogape.cpp4f7dk'
+        });
+
+        map.addLayer({
+            'id': 'snow_accumulation_layer',
+            'type': 'fill',
+            'source': 'snow_accumulation',
+            'source-layer': 'acc_reclass_15-bt9d53', // Reemplaza con el nombre correcto de la capa
+            'layout': {},
+            'paint': {
+                'fill-color': '#ffffff',
+                'fill-opacity': 0.7
+            }
+        },'road-label'); 
+        
+        map.addSource('ski_lines', {
+            type: 'vector',
+            url: 'mapbox://mariogape.dk36a3jm'
+        });
+
+        map.addLayer({
+            'id': 'lines_ski',
+            'type': 'line',
+            'source': 'ski_lines',
+            'source-layer': 'bbdd_lineas_mapbox_v3-863akm',
+            'layout': {
+                'line-join': 'round',
+                'line-cap': 'round'
+            },
+            'paint': {
+                'line-color': [
+                    'match',
+                    ['get', 'DIFICULTAD'],
+                    // Grupo de S1.1 a S1.3 -> Verde
+                    'S1.1', '#00FF00',
+                    'S1.2', '#00FF00',
+                    'S1.3', '#00FF00',
+                    // Grupo de S2.1 a S2.3 -> Azul
+                    'S2.1', '#0000FF',
+                    'S2.2', '#0000FF',
+                    'S2.3', '#0000FF',
+                    // Grupo de S3.1 a S3.3 -> Rojo
+                    'S3.1', '#FF0000',
+                    'S3.2', '#FF0000',
+                    'S3.3', '#FF0000',
+                    // Grupo de S4.1 a S4.3 -> Negro
+                    'S4.1', '#000000',
+                    'S4.2', '#000000',
+                    'S4.3', '#000000',
+                    // Default color (en caso de que no haya coincidencias)
+                    '#FFFFFF'
+                ],
+                'line-width': 3
+            }
+        });
+
+        // Añadir la capa invisible para capturar mejor los clics
+        map.addLayer({
+            'id': 'lines_ski_clickable',
+            'type': 'line',
+            'source': 'ski_lines',
+            'source-layer': 'bbdd_lineas_mapbox_v3-863akm',
+            'layout': {},
+            'paint': {
+                'line-width': 14, // Mayor ancho de línea
+                'line-opacity': 0 // Invisible
+            }
+        });
+
+        map.addSource('mapbox-dem', {
+            'type': 'raster-dem',
+            'url': 'mapbox://mapbox.mapbox-terrain-dem-v1',
+            'tileSize': 512,
+            'maxzoom': 14
+        });
+
+        map.setTerrain({ 'source': 'mapbox-dem', 'exaggeration': 1.3 });
+        // Botón de pantalla completa con funcionalidad
+    document.getElementById('fullscreen-button').addEventListener('click', () => {
+        const mapContainer = document.getElementById('map');
+        if (!document.fullscreenElement) {
+            mapContainer.requestFullscreen();
+        } else {
+            document.exitFullscreen();
+        }
+    });
+        // Funcionalidad para los botones de control
+        document.getElementById('tilt-up').addEventListener('click', () => {
+            map.easeTo({
+                pitch: Math.min(map.getPitch() + 10, 85), // Aumenta la inclinación, con un máximo de 85 grados
+                duration: 300 // Duración de la transición en milisegundos
+            });
+        });
+
+        document.getElementById('tilt-down').addEventListener('click', () => {
+            map.easeTo({
+                pitch: Math.max(map.getPitch() - 10, 0), // Disminuye la inclinación, con un mínimo de 0 grados
+                duration: 300 // Duración de la transición en milisegundos
+            });
+        });
+
+        document.getElementById('rotate-left').addEventListener('click', () => {
+            map.easeTo({
+                bearing: map.getBearing() - 15, // Rota la cámara 15 grados a la izquierda
+                duration: 300 // Duración de la transición en milisegundos
+            });
+        });
+
+        document.getElementById('rotate-right').addEventListener('click', () => {
+            map.easeTo({
+                bearing: map.getBearing() + 15, // Rota la cámara 15 grados a la derecha
+                duration: 300 // Duración de la transición en milisegundos
+            });
+        });
+
+        document.getElementById('reset-north').addEventListener('click', () => {
+            map.easeTo({ pitch: 0, bearing: 0 }); // Restablece la orientación hacia el norte
+        });
+    });
+    // Funcionalidad del slider para filtrar la acumulación de nieve
+    const slider = document.getElementById('snow-slider');
+    slider.addEventListener('input', (e) => {
+        const value = parseInt(e.target.value);
+        map.setFilter('snow_accumulation_layer', ['<=', ['get', 'DN'], value]);
+    });
+    map.on('click', 'lines_ski_clickable', (e) => {
+        const featureProperties = e.features[0].properties;
+        // Crear el contenido del popup con el nuevo orden
+        const macizo = featureProperties.MACIZO || 'No disponible';
+        const pico = featureProperties.PICO || 'No disponible';
+        const ladera = featureProperties.LADERA || 'No disponible';
+        const linea = featureProperties.LÍNEA || 'No disponible';
+        const altura = featureProperties['ALTURA (M)'] || 'No disponible';
+        const desnivel = featureProperties['DESNIVEL (M)'] || 'No disponible';
+        const orientacion = featureProperties.ORIENTACIÓN || 'No disponible';
+        const dificultad = featureProperties.DIFICULTAD || 'No disponible';
+        const exposicion = featureProperties.EXPOSICIÓN || 'No disponible';
+        const acNieve = featureProperties['AC. NIEVE'] || 'No disponible';
+
+    // Crear el contenido del popup con el orden especificado y ocultando títulos donde es necesario
+        const popupContent = `
+            ${macizo}<br>
+            ${pico}<br>
+            ${ladera}<br>
+            ${linea}<br>
+            <hr style="border-top: 1px solid white; margin: 5px 0;"> <!-- Barra de separación -->
+            <strong>ALTURA (M):</strong> ${altura}<br>
+            <strong>DESNIVEL (M):</strong> ${desnivel}<br>
+            <strong>ORIENTACIÓN:</strong> ${orientacion}<br>
+            <strong>DIFICULTAD:</strong> ${dificultad}<br>
+            <strong>EXPOSICIÓN:</strong> ${exposicion}<br>
+            <strong>AC. NIEVE:</strong> ${acNieve}
+        `;
+        new mapboxgl.Popup({ className: 'custom-popup' })
+            .setLngLat(e.lngLat)
+            .setHTML(popupContent)
+            .addTo(map);
+    });
+
+    // Puedes añadir eventos adicionales aquí si los necesitas, como cambios en el cursor, etc.
+</script>
+
+</body>
+</html>
